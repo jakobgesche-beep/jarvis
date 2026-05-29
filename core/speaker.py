@@ -20,7 +20,7 @@ class Speaker:
                 from kokoro import KPipeline
                 self._kokoro = KPipeline(lang_code="a")
                 self._kokoro_available = True
-            except ImportError:
+            except Exception:
                 self._kokoro_available = False
         return self._kokoro_available
 

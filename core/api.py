@@ -3,15 +3,19 @@
 import asyncio
 import json
 import os
+from pathlib import Path
 from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from core.memory import Memory
+
+WEB_DIR = Path(__file__).parent.parent / "web"
 
 
 class ConnectionManager:
@@ -61,6 +65,10 @@ def create_app(brain, memory: Memory) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Web-UI lokal ausliefern – NUR /app, "/" NICHT mounten (würde API-Routes blockieren)
+    if (WEB_DIR / "app").exists():
+        app.mount("/app", StaticFiles(directory=str(WEB_DIR / "app"), html=True), name="app")
 
     class ChatRequest(BaseModel):
         message: str

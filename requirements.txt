@@ -4,6 +4,10 @@ openai>=1.30.0
 # API-Server für iPhone PWA
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
+aiofiles>=23.0.0
+
+# Natives Mac-Fenster
+pywebview>=5.0.0
 
 # Speech-to-Text (lokal, kostenlos)
 faster-whisper>=1.0.0

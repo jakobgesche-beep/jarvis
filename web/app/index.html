@@ -515,6 +515,16 @@
   // ── Auto-restore ──
   window.addEventListener('load', () => {
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/app/sw.js');
+
+    // Wenn lokal geöffnet (Mac-App) → direkt verbinden ohne Setup
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (isLocal) {
+      apiUrl = location.origin;
+      apiToken = '';
+      showApp();
+      return;
+    }
+
     const url = localStorage.getItem('jarvis_url');
     if (url) {
       apiUrl = url;
