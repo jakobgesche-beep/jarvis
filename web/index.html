@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS – Dein persönlicher KI-Assistent</title>
+  <meta name="description" content="Vollständig autonomer, sprechender KI-Assistent für Mac und iPhone.">
+  <style>
+    :root {
+      --bg: #05050d;
+      --surface: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+      --blue: #4a9eff;
+      --purple: #7c5fff;
+      --text: #e8e8f0;
+      --muted: #6b6b80;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    /* Animated background glow */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -40%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 600px;
+      background: radial-gradient(ellipse, rgba(74,158,255,0.12) 0%, transparent 70%);
+      pointer-events: none;
+      animation: pulse 6s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+      50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+    }
+
+    /* Nav */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 40px;
+      position: sticky;
+      top: 0;
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.05em;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    /* Hero */
+    .hero {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 100px 24px 60px;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(74,158,255,0.1);
+      border: 1px solid rgba(74,158,255,0.25);
+      color: var(--blue);
+      padding: 6px 14px;
+      border-radius: 100px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-bottom: 28px;
+    }
+
+    .badge::before { content: '●'; font-size: 8px; animation: blink 2s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    h1 {
+      font-size: clamp(3rem, 10vw, 5.5rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      background: linear-gradient(135deg, #fff 0%, var(--blue) 50%, var(--purple) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 20px;
+    }
+
+    .subtitle {
+      font-size: 1.2rem;
+      color: var(--muted);
+      max-width: 500px;
+      margin: 0 auto 48px;
+      line-height: 1.6;
+    }
+
+    /* CTA Buttons */
+    .cta-group {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 80px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      color: white;
+      box-shadow: 0 0 30px rgba(74,158,255,0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 40px rgba(74,158,255,0.5);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.07);
+      transform: translateY(-2px);
+    }
+
+    .btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+    /* Feature grid */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      max-width: 900px;
+      margin: 0 auto 100px;
+      padding: 0 24px;
+    }
+
+    .feature {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .feature-icon { font-size: 1.8rem; margin-bottom: 12px; }
+    .feature h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; }
+    .feature p { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+
+    /* Setup sections */
+    .setup {
+      max-width: 760px;
+      margin: 0 auto 100px;
+      padding: 0 24px;
+    }
+
+    .setup-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .setup-subtitle {
+      color: var(--muted);
+      margin-bottom: 28px;
+      font-size: 0.95rem;
+    }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .step-content { flex: 1; }
+    .step-content strong { display: block; font-size: 0.95rem; margin-bottom: 4px; }
+    .step-content span { font-size: 0.85rem; color: var(--muted); }
+
+    code {
+      background: rgba(74,158,255,0.1);
+      color: var(--blue);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-family: 'SF Mono', monospace;
+      font-size: 0.85em;
+    }
+
+    .warning-box {
+      background: rgba(255,190,60,0.08);
+      border: 1px solid rgba(255,190,60,0.2);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-top: 16px;
+      font-size: 0.875rem;
+      color: #ffc83d;
+      display: flex;
+      gap: 10px;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 40px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 600px) {
+      nav { padding: 16px 20px; }
+      .hero { padding: 70px 20px 40px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">
+    <div class="logo-icon">J</div>
+    JARVIS
+  </div>
+  <a href="/app/" class="btn btn-secondary" style="padding: 10px 20px; font-size:0.9rem;">
+    App öffnen →
+  </a>
+</nav>
+
+<section class="hero">
+  <div class="badge">Vollständig kostenlos · Läuft lokal</div>
+  <h1>JARVIS</h1>
+  <p class="subtitle">
+    Dein persönlicher KI-Assistent für Mac und iPhone – hört auf deine Stimme,
+    steuert deinen Mac und antwortet natürlich auf Deutsch.
+  </p>
+
+  <div class="cta-group">
+    <a href="#mac" class="btn btn-primary">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+      Mac Download (.dmg)
+    </a>
+    <a href="/app/" class="btn btn-secondary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>
+      iPhone App öffnen
+    </a>
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">🎙️</div>
+      <h3>Wake-Word</h3>
+      <p>Sag "Hey Jarvis" – kein Knopf drücken nötig</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🧠</div>
+      <h3>Groq LLM</h3>
+      <p>llama-3.3-70b kostenlos – keine monatlichen Kosten</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔒</div>
+      <h3>Privat</h3>
+      <p>Whisper, TTS und Embeddings laufen vollständig lokal</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📱</div>
+      <h3>iPhone PWA</h3>
+      <p>Installierbar auf dem Home-Screen, live Chat-Verlauf</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">⚡</div>
+      <h3>macOS Tools</h3>
+      <p>Apps öffnen, Lautstärke, Benachrichtigungen, AppleScript</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📧</div>
+      <h3>Gmail & Kalender</h3>
+      <p>E-Mails lesen/senden, Termine abfragen und erstellen</p>
+    </div>
+  </div>
+</section>
+
+<!-- Mac Setup -->
+<section class="setup" id="mac">
+  <h2 class="setup-title">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--blue)"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+    Installation auf dem Mac
+  </h2>
+  <p class="setup-subtitle">Einmalige Einrichtung – dann läuft Jarvis automatisch beim Mac-Start.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>DMG herunterladen & öffnen</strong>
+        <span>JARVIS.dmg herunterladen und die App in den Programme-Ordner ziehen.</span>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>Gatekeeper umgehen</strong>
+        <span>Da JARVIS nicht von Apple signiert ist: App <strong>rechtsklicken → Öffnen → Öffnen</strong>. Nur beim ersten Start nötig.</span>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>Groq API Key eintragen</strong>
+        <span>Kostenlosen Key auf <code>groq.com</code> erstellen und in der App eintragen.</span>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <strong>Berechtigungen freischalten</strong>
+        <span>Systemeinstellungen → Datenschutz → <strong>Mikrofon</strong>, <strong>Bedienungshilfen</strong> und <strong>Automation</strong> für JARVIS aktivieren.</span>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <strong>"Hey Jarvis" sagen</strong>
+        <span>JARVIS startet und hört auf das Wake-Word. Sprich einfach.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="warning-box">
+    ⚠️ <span>JARVIS ist <strong>nicht im Mac App Store</strong> verfügbar und nicht Apple-signiert. Das Umgehen von Gatekeeper via Rechtsklick → Öffnen ist normal für nicht-signierte Apps und sicher.</span>
+  </div>
+</section>
+
+<!-- iPhone Setup -->
+<section class="setup">
+  <h2 class="setup-title">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>
+    JARVIS auf dem iPhone installieren
+  </h2>
+  <p class="setup-subtitle">Als PWA – kein App Store, kein Download, funktioniert wie eine native App.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>App in Safari öffnen</strong>
+        <span>Auf dem iPhone <strong>in Safari</strong> (nicht Chrome) die App-URL öffnen.</span>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>Zum Home-Screen hinzufügen</strong>
+        <span>Teilen-Symbol tippen → <strong>"Zum Home-Bildschirm"</strong> → Hinzufügen.</span>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>API-URL & Token eingeben</strong>
+        <span>Die Cloudflare-Tunnel-URL deines Macs und deinen API-Token eintragen.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  JARVIS v3 · Open Source · Läuft lokal auf deinem Mac
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="JARVIS">
+  <title>JARVIS</title>
+  <link rel="manifest" href="/app/manifest.json">
+  <link rel="apple-touch-icon" href="/app/icon-192.png">
+  <style>
+    :root {
+      --bg: #05050d;
+      --surface: rgba(255,255,255,0.05);
+      --surface2: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.08);
+      --blue: #4a9eff;
+      --purple: #7c5fff;
+      --green: #34d399;
+      --red: #f87171;
+      --text: #e8e8f0;
+      --muted: #6b6b80;
+      --radius: 18px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── Setup Screen ── */
+    #setup-screen {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      z-index: 100;
+    }
+
+    #setup-screen.hidden { display: none; }
+
+    .setup-logo {
+      width: 72px;
+      height: 72px;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      font-weight: 900;
+      color: white;
+      margin-bottom: 24px;
+    }
+
+    #setup-screen h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #fff, var(--blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    #setup-screen p {
+      color: var(--muted);
+      text-align: center;
+      margin-bottom: 32px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .input-group {
+      width: 100%;
+      max-width: 380px;
+      margin-bottom: 14px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .input-group input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-group input:focus { border-color: var(--blue); }
+    .input-group input::placeholder { color: var(--muted); }
+
+    .btn-connect {
+      width: 100%;
+      max-width: 380px;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      color: white;
+      border: none;
+      border-radius: 14px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .btn-connect:active { transform: scale(0.98); opacity: 0.9; }
+
+    /* ── Main App ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding-top: var(--safe-top);
+    }
+
+    #app.hidden { display: none; }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .header-logo-icon {
+      width: 30px;
+      height: 30px;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      transition: background 0.3s;
+    }
+
+    .status-dot.connected { background: var(--green); animation: pulse-dot 2s infinite; }
+    @keyframes pulse-dot {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(52,211,153,0); }
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-label { font-size: 0.75rem; color: var(--muted); }
+
+    .btn-settings {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+    }
+
+    .btn-settings:active { background: var(--surface); }
+
+    /* Messages */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Empty state */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 40px 20px;
+      gap: 12px;
+    }
+
+    .empty-state .icon { font-size: 3rem; opacity: 0.4; }
+    .empty-state p { font-size: 0.9rem; line-height: 1.5; max-width: 240px; }
+
+    /* Message bubbles */
+    .msg {
+      display: flex;
+      flex-direction: column;
+      max-width: 88%;
+      animation: fadeUp 0.25s ease;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg.user { align-self: flex-end; align-items: flex-end; }
+    .msg.assistant { align-self: flex-start; align-items: flex-start; }
+
+    .msg-bubble {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .msg.user .msg-bubble {
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      color: white;
+      border-bottom-right-radius: 6px;
+    }
+
+    .msg.assistant .msg-bubble {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 6px;
+    }
+
+    .msg-time {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 4px;
+      padding: 0 4px;
+    }
+
+    /* Tool call card */
+    .tool-card {
+      background: rgba(74,158,255,0.06);
+      border: 1px solid rgba(74,158,255,0.15);
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin: 4px 0;
+      align-self: flex-start;
+      max-width: 88%;
+      animation: fadeUp 0.2s ease;
+    }
+
+    .tool-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--blue);
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .tool-card-body {
+      margin-top: 8px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-family: 'SF Mono', monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    /* Typing indicator */
+    .typing {
+      align-self: flex-start;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      border-bottom-left-radius: 6px;
+      padding: 14px 18px;
+      display: none;
+      animation: fadeUp 0.2s ease;
+    }
+
+    .typing.visible { display: flex; gap: 5px; align-items: center; }
+
+    .typing-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: bounce 1.2s infinite;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-6px); }
+    }
+
+    /* Input bar */
+    .input-bar {
+      padding: 12px 16px;
+      padding-bottom: calc(12px + var(--safe-bottom));
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      flex-shrink: 0;
+      background: var(--bg);
+    }
+
+    #text-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+      resize: none;
+      max-height: 120px;
+      line-height: 1.4;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    #text-input:focus { border-color: var(--blue); }
+    #text-input::placeholder { color: var(--muted); }
+
+    .btn-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+
+    #btn-send {
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      color: white;
+    }
+
+    #btn-send:active { transform: scale(0.93); }
+
+    #btn-voice {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    #btn-voice.recording {
+      background: rgba(248,113,113,0.15);
+      border-color: var(--red);
+      color: var(--red);
+      animation: pulse-red 1s infinite;
+    }
+
+    @keyframes pulse-red {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.3); }
+      50% { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Setup -->
+<div id="setup-screen">
+  <div class="setup-logo">J</div>
+  <h1>JARVIS</h1>
+  <p>Verbinde dich mit deinem JARVIS-Mac über Cloudflare Tunnel.</p>
+
+  <div class="input-group">
+    <label>API URL</label>
+    <input id="setup-url" type="url" placeholder="https://jarvis.dein-tunnel.workers.dev" autocomplete="off" autocorrect="off" autocapitalize="none">
+  </div>
+
+  <div class="input-group">
+    <label>API Token (optional)</label>
+    <input id="setup-token" type="password" placeholder="Leer lassen wenn kein Token gesetzt">
+  </div>
+
+  <button class="btn-connect" onclick="connect()">Verbinden →</button>
+</div>
+
+<!-- App -->
+<div id="app" class="hidden">
+  <header>
+    <div class="header-logo">
+      <div class="header-logo-icon">J</div>
+      JARVIS
+    </div>
+    <div class="header-right">
+      <span class="status-label" id="status-label">Getrennt</span>
+      <div class="status-dot" id="status-dot"></div>
+      <button class="btn-settings" onclick="resetSetup()" title="Einstellungen">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="messages">
+    <div class="empty-state" id="empty-state">
+      <span class="icon">🤖</span>
+      <p>Sag etwas oder schreib eine Nachricht an Jarvis.</p>
+    </div>
+    <div class="typing" id="typing">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>
+  </div>
+
+  <div class="input-bar">
+    <button class="btn-icon" id="btn-voice" onclick="toggleVoice()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+      </svg>
+    </button>
+    <textarea id="text-input" placeholder="Schreib Jarvis etwas…" rows="1"
+      onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <button class="btn-icon" id="btn-send" onclick="sendText()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+  let apiUrl = '';
+  let apiToken = '';
+  let ws = null;
+  let recognition = null;
+  let isRecording = false;
+
+  // ── Setup ──
+  function connect() {
+    const url = document.getElementById('setup-url').value.trim().replace(/\/$/, '');
+    const token = document.getElementById('setup-token').value.trim();
+    if (!url) return;
+    apiUrl = url;
+    apiToken = token;
+    localStorage.setItem('jarvis_url', url);
+    localStorage.setItem('jarvis_token', token);
+    showApp();
+  }
+
+  function resetSetup() {
+    localStorage.removeItem('jarvis_url');
+    localStorage.removeItem('jarvis_token');
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('setup-screen').classList.remove('hidden');
+    if (ws) ws.close();
+  }
+
+  function showApp() {
+    document.getElementById('setup-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    loadHistory();
+    connectWS();
+  }
+
+  // ── Auto-restore ──
+  window.addEventListener('load', () => {
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/app/sw.js');
+    const url = localStorage.getItem('jarvis_url');
+    if (url) {
+      apiUrl = url;
+      apiToken = localStorage.getItem('jarvis_token') || '';
+      document.getElementById('setup-url').value = url;
+      document.getElementById('setup-token').value = apiToken;
+      showApp();
+    }
+  });
+
+  // ── WebSocket ──
+  function connectWS() {
+    if (!apiUrl) return;
+    const wsUrl = apiUrl.replace(/^http/, 'ws') + '/ws' + (apiToken ? `?token=${apiToken}` : '');
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => setStatus(true);
+    ws.onclose = () => { setStatus(false); setTimeout(connectWS, 3000); };
+    ws.onerror = () => setStatus(false);
+
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.type === 'user') appendMessage('user', data.text);
+      if (data.type === 'assistant') { hideTyping(); appendMessage('assistant', data.text); }
+      if (data.type === 'tool') appendTool(data.name, data.result);
+    };
+  }
+
+  function setStatus(ok) {
+    document.getElementById('status-dot').className = 'status-dot' + (ok ? ' connected' : '');
+    document.getElementById('status-label').textContent = ok ? 'Verbunden' : 'Getrennt';
+  }
+
+  // ── History ──
+  async function loadHistory() {
+    try {
+      const r = await fetch(`${apiUrl}/history?token=${apiToken}&limit=40`);
+      const { messages } = await r.json();
+      messages.forEach(m => appendMessage(m.role === 'user' ? 'user' : 'assistant', m.content, false));
+      scrollBottom();
+    } catch {}
+  }
+
+  // ── Send ──
+  async function sendText() {
+    const input = document.getElementById('text-input');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    autoResize(input);
+    showTyping();
+    appendMessage('user', text);
+
+    try {
+      await fetch(`${apiUrl}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, token: apiToken }),
+      });
+    } catch (e) {
+      hideTyping();
+      appendMessage('assistant', 'Verbindungsfehler – ist der Mac online?');
+    }
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendText();
+    }
+  }
+
+  // ── Voice ──
+  function toggleVoice() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      appendMessage('assistant', 'Spracheingabe wird in diesem Browser leider nicht unterstützt.');
+      return;
+    }
+    if (isRecording) {
+      stopVoice();
+    } else {
+      startVoice();
+    }
+  }
+
+  function startVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SR();
+    recognition.lang = 'de-DE';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      document.getElementById('text-input').value = text;
+      stopVoice();
+      sendText();
+    };
+    recognition.onend = () => stopVoice();
+    recognition.onerror = () => stopVoice();
+
+    recognition.start();
+    isRecording = true;
+    document.getElementById('btn-voice').classList.add('recording');
+  }
+
+  function stopVoice() {
+    if (recognition) { try { recognition.stop(); } catch {} }
+    isRecording = false;
+    document.getElementById('btn-voice').classList.remove('recording');
+  }
+
+  // ── UI helpers ──
+  function appendMessage(role, text, scroll = true) {
+    const empty = document.getElementById('empty-state');
+    if (empty) empty.remove();
+
+    const typing = document.getElementById('typing');
+    const msgs = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+
+    const time = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    div.innerHTML = `
+      <div class="msg-bubble">${escHtml(text)}</div>
+      <span class="msg-time">${time}</span>
+    `;
+    msgs.insertBefore(div, typing);
+    if (scroll) scrollBottom();
+  }
+
+  function appendTool(name, result) {
+    const msgs = document.getElementById('messages');
+    const typing = document.getElementById('typing');
+    const div = document.createElement('div');
+    div.className = 'tool-card';
+    div.innerHTML = `
+      <div class="tool-card-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        Tool: ${escHtml(name)}
+      </div>
+      <div class="tool-card-body" style="display:none">${escHtml(result || '')}</div>
+    `;
+    msgs.insertBefore(div, typing);
+    scrollBottom();
+  }
+
+  function showTyping() { document.getElementById('typing').classList.add('visible'); scrollBottom(); }
+  function hideTyping() { document.getElementById('typing').classList.remove('visible'); }
+
+  function scrollBottom() {
+    const msgs = document.getElementById('messages');
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
+  }
+</script>
+</body>
+</html>

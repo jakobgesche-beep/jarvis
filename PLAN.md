@@ -1,126 +1,159 @@
-# JARVIS v3 – Projektplan
-
-## Überblick
-
-| | |
-|---|---|
-| **Ziel** | Vollständig autonomer, sprechender KI-Agent auf macOS |
-| **Hardware** | MacBook Air M4 |
-| **Stack** | Python 3.12, GPT-4o mini, faster-whisper, Kokoro TTS, SQLite+ChromaDB |
-| **Kosten** | ~$2/Monat (nur LLM-Calls) |
+# JARVIS v3 – Checkliste
 
 ---
 
-## Phasen-Roadmap
+## Setup
 
-### Phase 1 – Voice & Control (Woche 1–2)
-Grundgerüst: Sprechen, Zuhören, Mac steuern
-
-- [ ] Python 3.12 + venv einrichten
-- [ ] `listener.py`: Mikrofon-Aufnahme mit Silence-Detection (webrtcvad)
-- [ ] `listener.py`: Wake-Word-Detection "Hey Jarvis" (openwakeword)
-- [ ] `listener.py`: faster-whisper STT integrieren (base.en Modell)
-- [ ] `speaker.py`: Kokoro TTS installieren und testen
-- [ ] `speaker.py`: macOS `say`-Fallback wenn Kokoro nicht verfügbar
-- [ ] `macos.py`: AppleScript-Wrapper (open_app, notify, get_frontmost)
-- [ ] `brain.py`: GPT-4o mini mit System-Prompt + Tool-Calling
-- [ ] `main.py`: Vollständiger Kern-Loop (9 Schritte) zusammenführen
-- [ ] **Meilenstein**: "Hey Jarvis, öffne Safari" funktioniert end-to-end
-
-### Phase 2 – Smart Automation (Woche 3–4)
-Externe Dienste anbinden
-
-- [ ] `gmail.py`: OAuth2 Flow + E-Mails lesen/senden
-- [ ] `calendar.py`: Google Calendar lesen/schreiben
-- [ ] `browser.py`: Playwright headless Browser-Automation
-- [ ] `browser.py`: Screenshot → GPT-4o Vision Analyse
-- [ ] `notion.py`: Notion API – Seiten erstellen/lesen
-- [ ] `brain.py`: Tool-Routing für alle 9 definierten Tools
-- [ ] **Meilenstein**: "Jarvis, lies meine E-Mails vor" funktioniert
-
-### Phase 3 – Autonomous Agent (Woche 5–6)
-Gedächtnis, Autonomie, Proaktivität
-
-- [ ] `memory.py`: SQLite Long-Term Memory
-- [ ] `memory.py`: ChromaDB Vector-Search (Semantic Retrieval)
-- [ ] `memory.py`: OpenAI text-embedding-3-small für Embeddings
-- [ ] `brain.py`: ReAct-Loop (Think → Act → Observe → Repeat)
-- [ ] Proaktiver Modus via macOS LaunchAgent (Tages-Briefing 8 Uhr)
-- [ ] Ollama-Fallback für Offline-Betrieb + sensible Daten
-- [ ] Smart-Routing: Einfache Tasks → Ollama, Komplexe → GPT-4o mini
-- [ ] **Meilenstein**: Jarvis führt mehrstufige Tasks selbstständig aus
+- [ ] Homebrew installieren (falls nicht vorhanden): `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
+- [ ] Python 3.12 installieren: `brew install python@3.12`
+- [ ] Projektordner öffnen: `cd ~/jarvis`
+- [ ] Virtual Environment erstellen: `python3.12 -m venv .venv`
+- [ ] Virtual Environment aktivieren: `source .venv/bin/activate`
+- [ ] `.env` Datei erstellen: `cp .env.example .env`
+- [ ] OpenAI Account erstellen auf platform.openai.com
+- [ ] OpenAI API Key in `.env` eintragen: `OPENAI_API_KEY=sk-...`
+- [ ] $10 auf OpenAI aufladen (reicht 2–3 Monate)
+- [ ] Alle Dependencies installieren: `pip install -r requirements.txt`
+- [ ] Playwright Browser installieren: `playwright install chromium`
+- [ ] macOS Berechtigung freischalten: Systemeinstellungen → Datenschutz → Mikrofon → Terminal ✓
+- [ ] macOS Berechtigung freischalten: Systemeinstellungen → Datenschutz → Bedienungshilfen → Terminal ✓
+- [ ] macOS Berechtigung freischalten: Systemeinstellungen → Datenschutz → Automation → Terminal ✓
 
 ---
 
-## Kern-Loop (Phase 1)
+## Phase 1 – Voice & Control
 
-```
-1. Mikrofon hört dauerhaft (Hintergrund-Thread)
-2. Wake-Word "Hey Jarvis" erkannt → Aufnahme starten
-3. Silence-Detection → Aufnahme beenden (~1.5s Stille)
-4. faster-whisper transkribiert lokal (~100ms)
-5. GPT-4o mini wählt Tool + generiert Plan
-6. Tool wird ausgeführt (AppleScript / API / Browser)
-7. Ergebnis → GPT-4o mini generiert Antwort
-8. Kokoro TTS spricht Antwort aus
-9. Zurück zu Schritt 1
-```
+### Listener (STT)
+- [x] `core/listener.py`: Mikrofon-Aufnahme mit `sounddevice` testen
+- [x] `core/listener.py`: RMS-basierte Silence-Detection implementieren (1.5s Stille = Ende)
+- [x] `core/listener.py`: faster-whisper Modell `base` herunterladen und integrieren (~150 MB, einmalig)
+- [ ] `core/listener.py`: faster-whisper STT testen – kurzen Satz aufnehmen und transkribieren
+- [x] `core/listener.py`: Wake-Word-Detection "Hey Jarvis" mit `openwakeword` einbauen
+- [x] `core/listener.py`: Wake-Word in Hintergrund-Thread laufen lassen (non-blocking)
 
----
+### Speaker (TTS)
+- [ ] `core/speaker.py`: Kokoro TTS installieren: `pip install kokoro soundfile`
+- [ ] `core/speaker.py`: Kokoro Modell beim ersten Start herunterladen (~300 MB)
+- [ ] `core/speaker.py`: Kokoro TTS testen – kurzen Text vorlesen lassen
+- [ ] `core/speaker.py`: macOS `say`-Fallback testen (funktioniert sofort ohne Setup)
+- [x] `core/speaker.py`: Automatischen Fallback bei Kokoro-Fehler verifizieren
 
-## Definierte Tools (Phase 2)
+### macOS-Steuerung
+- [ ] `tools/macos.py`: `open_app("Safari")` testen – öffnet Safari via AppleScript
+- [ ] `tools/macos.py`: `send_notification("Test", "Hallo")` testen
+- [ ] `tools/macos.py`: `get_frontmost_app()` testen – gibt aktive App zurück
+- [ ] `tools/macos.py`: `set_volume(50)` testen
+- [ ] `tools/macos.py`: `open_url("https://google.com")` testen
 
-| Tool | Beschreibung | Kosten |
-|------|-------------|--------|
-| `open_app(app_name)` | macOS-App via AppleScript öffnen | $0 |
-| `search_web(query)` | Playwright öffnet Browser und sucht | $0 |
-| `read_emails(filter)` | Gmail API, optional mit Filter | $0 |
-| `send_email(to, subject, body)` | Gmail API senden | $0 |
-| `create_calendar_event(...)` | Google Calendar erstellen | $0 |
-| `get_calendar_events(date_range)` | Termine abfragen | $0 |
-| `save_to_notion(content, db)` | Notion-Seite erstellen | $0 |
-| `run_applescript(script)` | Direkte macOS-Steuerung | $0 |
-| `get_weather(location)` | Via Playwright oder Weather API | $0 |
+### Brain (LLM)
+- [x] `core/brain.py`: GPT-4o mini API-Verbindung testen (simpler Prompt)
+- [x] `core/brain.py`: System-Prompt auf Deutsch tunen
+- [x] `core/brain.py`: Tool `open_app` via Function-Calling testen
+- [x] `core/brain.py`: Tool `send_notification` via Function-Calling testen
+- [x] `core/brain.py`: Tool `run_applescript` via Function-Calling testen
 
----
-
-## Technologie-Entscheidungen
-
-| Komponente | Gewählt | Grund |
-|-----------|---------|-------|
-| STT | faster-whisper (lokal) | Kostenlos, ~100ms, M4-optimiert |
-| TTS | Kokoro TTS | Beste kostenlose Qualität 2024/25 |
-| LLM | GPT-4o mini | Bestes Preis/Leistung für Tool-Calling |
-| LLM Fallback | Ollama + Llama 3.2 | Offline, sensible Daten |
-| Memory | SQLite + ChromaDB | 100% lokal, keine Cloud |
-| Browser | Playwright | Beste Python-Integration |
-| Email/Cal | Google APIs | Komplett kostenlos |
+### Kern-Loop
+- [x] `main.py`: Listener + Brain + Speaker zusammenführen
+- [ ] `main.py`: Vollständigen 9-Schritte-Loop testen
+- [x] `main.py`: Fehlerbehandlung einbauen (API-Fehler, Mikrofon-Fehler)
+- [ ] **MEILENSTEIN**: Gesprochener Befehl "Hey Jarvis, öffne Safari" funktioniert end-to-end
 
 ---
 
-## macOS Berechtigungen (WICHTIG)
+## Phase 2 – Smart Automation
 
-Vor dem ersten Start in Systemeinstellungen freischalten:
-- Datenschutz → Mikrofon → Terminal/Python
-- Datenschutz → Bedienungshilfen → Terminal
-- Datenschutz → Automation → Terminal
+### Gmail
+- [ ] Google Cloud Console öffnen: console.cloud.google.com
+- [ ] Neues Projekt erstellen: "JARVIS"
+- [ ] Gmail API aktivieren: APIs & Services → Library → Gmail API → Enable
+- [ ] OAuth2 Credentials erstellen: Credentials → Create → OAuth Client ID → Desktop App
+- [ ] `credentials.json` herunterladen und in `~/jarvis/` ablegen
+- [ ] OAuth2 Flow einmal durchführen (Browser öffnet sich zur Autorisierung)
+- [ ] `tools/gmail.py`: `read_emails()` testen – zeigt letzte 5 ungelesene E-Mails
+- [ ] `tools/gmail.py`: `send_email()` testen – Test-Mail an eigene Adresse senden
+- [x] `core/brain.py`: Tool `read_emails` im Tool-Calling registrieren
+- [x] `core/brain.py`: Tool `send_email` im Tool-Calling registrieren
+- [ ] Test: "Jarvis, lies mir meine ungelesenen E-Mails vor"
+
+### Google Calendar
+- [ ] Google Calendar API aktivieren (gleiches JARVIS-Projekt in Cloud Console)
+- [ ] Calendar Scopes zu OAuth hinzufügen: `calendar.readonly` + `calendar.events`
+- [ ] `tools/calendar.py`: `get_events()` testen – zeigt Termine der nächsten 7 Tage
+- [ ] `tools/calendar.py`: `create_event()` testen – erstellt Test-Termin
+- [x] `core/brain.py`: Tool `get_calendar_events` im Tool-Calling registrieren
+- [x] `core/brain.py`: Tool `create_calendar_event` im Tool-Calling registrieren
+- [ ] Test: "Jarvis, was steht diese Woche an?"
+
+### Browser-Automation
+- [ ] `tools/browser.py`: `search_web("Wetter München")` testen
+- [ ] `tools/browser.py`: `take_screenshot_and_describe(url)` testen – Screenshot + Vision
+- [ ] `tools/browser.py`: `goto_and_extract(url)` testen – Text von Webseite extrahieren
+- [x] `core/brain.py`: Tool `search_web` im Tool-Calling registrieren
+- [ ] Test: "Jarvis, google mir den Wetterbericht für morgen"
+
+### Notion
+- [ ] notion.so → Einstellungen → Integrationen → Neue Integration "JARVIS" erstellen
+- [ ] Integration Token in `.env` eintragen: `NOTION_TOKEN=secret_...`
+- [ ] Gewünschte Notion-Seite mit JARVIS-Integration teilen (Share → JARVIS einladen)
+- [ ] `tools/notion.py`: `create_page()` testen – erstellt Test-Seite
+- [ ] `tools/notion.py`: `search_pages()` testen – findet bestehende Seiten
+- [x] `core/brain.py`: Tool `save_to_notion` im Tool-Calling registrieren
+- [ ] Test: "Jarvis, speichere das in Notion"
+
+### Tool-Routing finalisieren
+- [x] Alle Tools in `brain.py` vollständig registriert (12 Tools)
+- [ ] **MEILENSTEIN**: "Jarvis, lies meine E-Mails vor und erstell mir einen Kalender-Eintrag" funktioniert
 
 ---
 
-## Offene Fragen / Entscheidungen
+## Phase 3 – Autonomous Agent
 
-- [ ] Wake-Word: `openwakeword` vs `pvporcupine` (kostenlos vs. besser)
-- [ ] LLM: OpenAI GPT-4o mini vs. Anthropic Claude Haiku (ähnlicher Preis)
-- [ ] Proaktiver Modus: LaunchAgent vs. Hintergrund-Thread in main.py
-- [ ] UI: Kein UI (reines Voice-Interface) vs. minimales Status-Fenster
+### Long-Term Memory
+- [x] `core/memory.py`: SQLite `conversations`-Tabelle befüllt sich korrekt
+- [x] `core/memory.py`: `facts`-Tabelle testen – Fakten speichern und abrufen
+- [x] `core/memory.py`: ChromaDB installieren und initialisieren
+- [x] `core/memory.py`: OpenAI `text-embedding-3-small` für Embeddings integrieren
+- [x] `core/memory.py`: Semantische Suche testen – relevante vergangene Gespräche finden
+- [x] `core/brain.py`: Kontext aus Memory in jeden Prompt einbauen
+- [ ] Test: Jarvis erinnert sich an Informationen aus vergangenen Gesprächen
+
+### ReAct Agent Loop
+- [x] `core/brain.py`: ReAct-Loop implementieren (Think → Act → Observe → Repeat)
+- [x] ReAct max. Schritte begrenzen (5 Iterationen) um Endlosschleifen zu verhindern
+- [ ] ReAct-Loop testen: "Jarvis, recherchiere die 3 günstigsten MacBook-Hüllen und speichere sie in Notion"
+- [x] Fehlerbehandlung im ReAct-Loop (Tool schlägt fehl → Brain formuliert Fehler-Antwort)
+
+### Ollama Offline-Fallback
+- [ ] Ollama installieren: `brew install ollama`
+- [ ] Llama 3.2 3B Modell herunterladen: `ollama pull llama3.2:3b`
+- [ ] Ollama Server testen: `ollama run llama3.2:3b "Hallo"`
+- [x] `core/brain.py`: Smart-Routing einbauen – einfache Q&A → Ollama (gratis)
+- [x] `core/brain.py`: Komplexe Tasks / Tool-Calls automatisch zu GPT-4o mini routen
+- [ ] Sensible Daten (Passwörter, Bankdaten) immer lokal via Ollama verarbeiten
+- [ ] Test: Einfache Wissensfragen gehen an Ollama, Tool-Calls an GPT-4o mini
+
+### Proaktiver Modus
+- [ ] `scripts/morning_briefing.sh` testen – läuft manuell durch
+- [ ] LaunchAgent installieren: `./scripts/install_launchagent.sh`
+- [ ] LaunchAgent verifizieren: täglich um 08:00 startet Briefing
+- [ ] E-Mail-Monitoring einbauen: Bei wichtiger E-Mail → macOS Notification + Sprachausgabe
+- [ ] 15-Minuten-Erinnerung vor Kalender-Terminen implementieren
+- [ ] Wöchentliche Zusammenfassung in Notion speichern
+- [ ] **MEILENSTEIN**: Jarvis weckt dich morgens, erinnert an Termine und handelt selbstständig
 
 ---
 
-## Kostenübersicht (monatlich)
+## Tests
 
-| Service | Kosten |
-|---------|--------|
-| GPT-4o mini (~100 Anfragen/Tag) | ~$1–3 |
-| OpenAI Embeddings | ~$0.01 |
-| Alles andere | $0 |
-| **GESAMT** | **~$1–3/Monat** |
+- [ ] `pytest tests/test_macos.py` – alle macOS-Tests grün
+- [ ] `pytest tests/test_speaker.py` – Speaker-Fallback Test grün
+- [ ] Manueller End-to-End-Test: 10 verschiedene Sprachbefehle durchspielen
+- [ ] Latenz messen: Ziel < 2 Sekunden von Sprache bis Antwort
+
+---
+
+## Kosten prüfen
+
+- [ ] Nach Woche 2: OpenAI-Kosten prüfen (Ziel: < $1)
+- [ ] Nach Woche 4: Kosten prüfen (Ziel: < $3/Monat)
+- [ ] Ollama-Routing optimieren falls Kosten zu hoch

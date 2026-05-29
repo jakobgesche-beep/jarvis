@@ -13,8 +13,8 @@ main.py → listener → brain → tools → speaker
 ```
 
 - **listener.py** nimmt Audio auf, erkennt das Wake-Word und transkribiert mit faster-whisper
-- **brain.py** ist der GPT-4o mini Kern – er entscheidet welches Tool aufgerufen wird (Function Calling)
-- **memory.py** verwaltet Short-Term (letzte 20 Nachrichten) und Long-Term (SQLite + ChromaDB) Gedächtnis
+- **brain.py** ist der Groq LLM-Kern (llama-3.3-70b-versatile, kostenlos) – er entscheidet welches Tool aufgerufen wird (Function Calling + ReAct-Loop)
+- **memory.py** verwaltet Short-Term (letzte 20 Nachrichten) und Long-Term (SQLite + ChromaDB + lokale sentence-transformers Embeddings) Gedächtnis
 - **speaker.py** gibt Antworten mit Kokoro TTS aus, Fallback auf macOS `say`
 - **tools/** sind einzelne Module für macOS, Gmail, Calendar, Browser, Notion
 
@@ -56,7 +56,7 @@ python main.py
 
 ## Wichtige Konventionen
 
-- **Python 3.12**, async/await überall wo sinnvoll
+- **Python 3.11**, async/await überall wo sinnvoll
 - **Keine globalen Singletons** – Klassen werden in `main.py` instanziiert und per Parameter weitergegeben
 - **Jedes Tool-Modul** ist eigenständig importierbar und ohne laufenden Jarvis testbar
 - **Fehler in Tools** werfen Exceptions nie still – sie geben einen lesbaren Fehler-String zurück damit der Brain eine sinnvolle Antwort formulieren kann
@@ -64,10 +64,15 @@ python main.py
 
 ## Kosten-Prinzip
 
-- Kostenlos wo möglich (faster-whisper, Kokoro, SQLite, ChromaDB, Playwright, Google APIs)
-- Pay-per-Use nur für LLM-Calls: GPT-4o mini (~$0.0002/Anfrage)
-- Einfache Tasks über Ollama (lokal, $0) routen wenn möglich
-- Ziel: < $3/Monat bei 50–100 Anfragen/Tag
+**$0/Monat** – alles kostenlos:
+- LLM: Groq API (kostenlos, llama-3.3-70b-versatile) → API Key auf groq.com
+- STT: faster-whisper (lokal)
+- TTS: Kokoro (lokal) + macOS say (Fallback)
+- Wake-Word: openwakeword (lokal)
+- Embeddings: sentence-transformers all-MiniLM-L6-v2 (lokal, ~90 MB)
+- DB: SQLite + ChromaDB (lokal)
+- Browser: Playwright headless (lokal)
+- Google APIs: Gmail + Calendar (kostenlose Kontingente reichen)
 
 ## Phase-Status
 
@@ -89,9 +94,9 @@ Aktuell in **Phase 1** (Voice & Control). Alle Skeleton-Dateien sind vorhanden, 
 - `small` (500 MB, ~200ms) → besser bei Akzent oder Rauschen
 - In `listener.py` Zeile `Listener(model_size="base")` ändern
 
-**LLM-Modell wechseln:**
-- `.env`: `JARVIS_LLM_MODEL=gpt-4o` für maximale Qualität
-- `.env`: `JARVIS_LLM_MODEL=gpt-4o-mini` für normalen Betrieb (Standard)
+**LLM-Modell wechseln (alle kostenlos auf Groq):**
+- `.env`: `JARVIS_LLM_MODEL=llama-3.3-70b-versatile` → Standard, beste Qualität
+- `.env`: `JARVIS_LLM_MODEL=llama-3.1-8b-instant` → schneller, weniger komplex
 
 ## macOS-Berechtigungen (ohne die nichts funktioniert)
 

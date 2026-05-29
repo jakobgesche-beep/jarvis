@@ -27,6 +27,14 @@ pip install -r requirements.txt
 echo "Installiere Playwright Chromium..."
 playwright install chromium
 
+# openwakeword Modell herunterladen
+echo "Lade openwakeword hey_jarvis Modell..."
+python -c "
+from openwakeword.utils import download_models
+download_models(['hey_jarvis'])
+print('hey_jarvis Modell bereit.')
+" || echo "Warnung: openwakeword-Modell konnte nicht geladen werden – Fallback auf Enter-Taste."
+
 # .env prüfen
 if [ ! -f ".env" ]; then
     cp .env.example .env
@@ -49,3 +57,4 @@ echo ""
 echo "macOS Berechtigungen (WICHTIG):"
 echo "  Systemeinstellungen → Datenschutz → Mikrofon → Terminal ✓"
 echo "  Systemeinstellungen → Datenschutz → Bedienungshilfen → Terminal ✓"
+echo "  Systemeinstellungen → Datenschutz → Automation → Terminal ✓"
