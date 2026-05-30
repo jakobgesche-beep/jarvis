@@ -26,7 +26,13 @@ class Listener:
         if self._whisper is None:
             from faster_whisper import WhisperModel
             print(f"[Listener] Lade Whisper '{self._model_size}'...")
-            self._whisper = WhisperModel(self._model_size, device="auto", compute_type="int8")
+            self._whisper = WhisperModel(
+                self._model_size,
+                device="cpu",
+                compute_type="int8",
+                num_workers=1,       # verhindert OpenMP-Crash auf Intel Mac
+                cpu_threads=2,
+            )
 
     def _transcribe(self, audio: np.ndarray) -> str:
         self._load_whisper()

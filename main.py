@@ -1,13 +1,18 @@
-"""JARVIS v3 – Einstiegspunkt mit nativem Mac-Fenster"""
+"""JARVIS v3 – Einstiegspunkt"""
 
 import asyncio
 import os
 import signal
 import sys
 import threading
+import time
+
+# Crash-Fix: ctranslate2/faster-whisper crasht auf Intel Mac mit OpenMP Multi-Threading
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 from dotenv import load_dotenv
-
 load_dotenv()
 
 from core.listener import Listener
@@ -42,7 +47,7 @@ async def voice_loop(listener: Listener, brain: Brain, speaker: Speaker):
             print(f"[JARVIS] Sprachausgabe fehlgeschlagen: {e}")
 
 
-async def backend(memory, speaker, brain, listener):
+async def run_async(memory, speaker, brain, listener):
     await speaker.say("Jarvis ist bereit.")
     await asyncio.gather(
         voice_loop(listener, brain, speaker),
@@ -51,17 +56,31 @@ async def backend(memory, speaker, brain, listener):
 
 
 def run_backend(memory, speaker, brain, listener):
-    asyncio.run(backend(memory, speaker, brain, listener))
+    asyncio.run(run_async(memory, speaker, brain, listener))
+
+
+def wait_for_server(port: int, timeout: int = 15) -> bool:
+    """Wartet bis der API-Server antwortet."""
+    import urllib.request
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            urllib.request.urlopen(f"http://localhost:{port}/health", timeout=1)
+            return True
+        except Exception:
+            time.sleep(0.3)
+    return False
 
 
 def main():
-    # Objekte erstellen
+    port = int(os.getenv("JARVIS_API_PORT", "8080"))
+
     memory = Memory()
     speaker = Speaker()
     brain = Brain(memory=memory)
     listener = Listener()
 
-    # Backend im Hintergrund-Thread starten (Voice + API-Server)
+    # Backend (Voice-Loop + API-Server) im Hintergrund starten
     t = threading.Thread(
         target=run_backend,
         args=(memory, speaker, brain, listener),
@@ -69,34 +88,22 @@ def main():
     )
     t.start()
 
-    # Kurz warten bis API-Server hochgefahren ist
-    import time
-    time.sleep(2)
+    # Warten bis Server wirklich bereit ist
+    print(f"[JARVIS] Starte API-Server auf Port {port}...")
+    ready = wait_for_server(port)
+    if ready:
+        print(f"[JARVIS] Server bereit – öffne http://localhost:{port}/app/")
+    else:
+        print("[JARVIS] Server-Timeout – öffne trotzdem...")
 
-    # Natives Mac-Fenster mit der Chat-UI
-    try:
-        import webview
+    # HUD im Standard-Browser öffnen (kein pywebview = kein Crash)
+    import webbrowser
+    webbrowser.open(f"http://localhost:{port}/app/")
 
-        port = int(os.getenv("JARVIS_API_PORT", "8080"))
-
-        webview.create_window(
-            title="JARVIS",
-            url=f"http://localhost:{port}/app/",
-            width=420,
-            height=780,
-            resizable=True,
-            min_size=(360, 600),
-        )
-        webview.start()
-    except Exception as e:
-        # Kein pywebview → Browser öffnen als Fallback
-        print(f"[JARVIS] Kein nativer Fenster-Support ({e}), öffne Browser...")
-        import webbrowser
-        port = int(os.getenv("JARVIS_API_PORT", "8080"))
-        webbrowser.open(f"http://localhost:{port}/app/")
-        # Hauptthread am Leben halten
-        signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
-        t.join()
+    # Hauptthread am Leben halten
+    signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
+    signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
+    t.join()
 
 
 if __name__ == "__main__":
