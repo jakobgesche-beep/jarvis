@@ -51,3 +51,9 @@ class Speaker:
                 print(f"[Speaker] edge-tts Fehler: {e} – Fallback auf say")
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self._speak_macos, text)
+
+    async def say_stream(self, text_gen):
+        """Spielt Sätze sofort ab sobald sie aus dem Stream kommen."""
+        async for sentence in text_gen:
+            if sentence.strip():
+                await self.say(sentence)

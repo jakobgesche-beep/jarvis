@@ -25,26 +25,30 @@ MAX_CONSECUTIVE_ERRORS = 5
 
 
 async def voice_loop(listener: Listener, brain: Brain, speaker: Speaker):
+    from core.api import manager
     consecutive_errors = 0
     async for transcript in listener.listen():
         if not transcript.strip():
             continue
         print(f"[USER] {transcript}")
+        await manager.broadcast({"type": "user", "text": transcript})
         try:
-            response = await brain.process(transcript)
+            # Streaming: erster Satz startet TTS sofort
+            full_parts = []
+            async for sentence in brain.process_stream(transcript):
+                full_parts.append(sentence)
+                print(f"[JARVIS] {sentence}")
+                await manager.broadcast({"type": "assistant", "text": sentence})
+                await speaker.say(sentence)
             consecutive_errors = 0
         except Exception as e:
             consecutive_errors += 1
             print(f"[JARVIS] Fehler: {e}")
-            response = "Entschuldigung, da ist leider etwas schiefgelaufen."
+            fallback = "Entschuldigung, da ist leider etwas schiefgelaufen."
+            await speaker.say(fallback)
             if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
-                await speaker.say("Ich habe zu viele Fehler erlebt und beende mich jetzt.")
+                await speaker.say("Ich beende mich jetzt wegen zu vieler Fehler.")
                 sys.exit(1)
-        print(f"[JARVIS] {response}")
-        try:
-            await speaker.say(response)
-        except Exception as e:
-            print(f"[JARVIS] Sprachausgabe fehlgeschlagen: {e}")
 
 
 async def run_async(memory, speaker, brain, listener):

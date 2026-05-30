@@ -98,11 +98,15 @@ def create_app(brain, memory: Memory, listener=None) -> FastAPI:
         await manager.broadcast({"type": "user", "text": req.message})
 
         try:
-            response = await brain.process(req.message)
+            parts = []
+            async for sentence in brain.process_stream(req.message):
+                parts.append(sentence)
+                await manager.broadcast({"type": "assistant", "text": sentence})
+            response = " ".join(parts)
         except Exception as e:
             response = f"Fehler: {e}"
+            await manager.broadcast({"type": "assistant", "text": response})
 
-        await manager.broadcast({"type": "assistant", "text": response})
         return {"response": response}
 
     @app.get("/history")
