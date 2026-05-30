@@ -14,12 +14,12 @@ from tools.gmail import read_emails, send_email
 from tools.calendar import get_events, create_event
 from tools.browser import search_web
 from tools.notion import create_page, search_pages
-from tools.briefing import get_briefing
+from tools.briefing import get_briefing, get_weather
 
 _SYSTEM_PROMPT = """Du bist Jarvis, ein persönlicher KI-Assistent auf einem MacBook Air M4.
 Du kommunizierst auf Deutsch. Antworte IMMER in maximal 2 kurzen Sätzen – du wirst vorgelesen.
 Kein Markdown, keine Listen. Direkt und präzise wie ein professioneller Assistent.
-Bei Fragen die kein Tool brauchen: sofort antworten ohne Umwege."""
+Du hast VOLLEN Internetzugang. Bei Wetterfragen IMMER get_weather aufrufen. Bei Wissensfragen IMMER search_web nutzen. Niemals sagen dass du kein Internet hast."""
 
 _TOOLS = [
     {"type":"function","function":{"name":"open_app","description":"Öffnet eine macOS-App","parameters":{"type":"object","properties":{"app_name":{"type":"string"}},"required":["app_name"]}}},
@@ -33,6 +33,7 @@ _TOOLS = [
     {"type":"function","function":{"name":"create_calendar_event","description":"Kalendertermin erstellen","parameters":{"type":"object","properties":{"title":{"type":"string"},"start_iso":{"type":"string"},"duration_minutes":{"type":"integer","default":60},"description":{"type":"string","default":""}},"required":["title","start_iso"]}}},
     {"type":"function","function":{"name":"search_web","description":"Im Web suchen","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}}},
     {"type":"function","function":{"name":"get_briefing","description":"Tägliches Briefing: Uhrzeit, Datum, Wetter","parameters":{"type":"object","properties":{"city":{"type":"string","default":""}},"required":[]}}},
+    {"type":"function","function":{"name":"get_weather","description":"Aktuelles Wetter für eine Stadt abrufen – IMMER bei Wetterfragen nutzen","parameters":{"type":"object","properties":{"city":{"type":"string","description":"Stadtname z.B. Hannover, Berlin, München"}},"required":["city"]}}},
     {"type":"function","function":{"name":"save_to_notion","description":"Notiz in Notion speichern","parameters":{"type":"object","properties":{"title":{"type":"string"},"content":{"type":"string"}},"required":["title","content"]}}},
     {"type":"function","function":{"name":"search_notion","description":"Notion durchsuchen","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}}},
 ]
@@ -49,6 +50,7 @@ _TOOL_MAP = {
     "create_calendar_event":lambda a: create_event(a["title"], a["start_iso"], a.get("duration_minutes", 60), a.get("description", "")),
     "search_web":           lambda a: search_web(a["query"]),
     "get_briefing":         lambda a: get_briefing(a.get("city", "")),
+    "get_weather":          lambda a: get_weather(a["city"]),
     "save_to_notion":       lambda a: create_page(a["title"], a["content"]),
     "search_notion":        lambda a: search_pages(a["query"]),
 }
@@ -59,12 +61,18 @@ _SENTENCE_SEP = re.compile(r'(?<=[.!?])\s+')
 
 class Brain:
     def __init__(self, memory: Memory):
-        self._client = AsyncOpenAI(
-            api_key=os.environ["GROQ_API_KEY"],
-            base_url=_GROQ_BASE_URL,
-        )
         self._memory = memory
         self._model = os.getenv("JARVIS_LLM_MODEL", "llama-3.3-70b-versatile")
+        self._cached_key = ""
+        self._client_inst: AsyncOpenAI | None = None
+
+    @property
+    def _client(self) -> AsyncOpenAI:
+        key = os.environ.get("GROQ_API_KEY", "")
+        if key != self._cached_key or self._client_inst is None:
+            self._cached_key = key
+            self._client_inst = AsyncOpenAI(api_key=key, base_url=_GROQ_BASE_URL)
+        return self._client_inst
 
     async def _call_tool(self, name: str, args: dict) -> str:
         fn = _TOOL_MAP.get(name)

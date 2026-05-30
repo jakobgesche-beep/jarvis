@@ -50,9 +50,10 @@ manager = ConnectionManager()
 
 
 def _check_token(req_token: Optional[str], env_token: str) -> bool:
+    env_token = (env_token or "").strip()
     if not env_token:
-        return True
-    return req_token == env_token
+        return True  # Kein Token gesetzt → alles erlaubt
+    return (req_token or "").strip() == env_token
 
 
 def create_app(brain, memory: Memory, listener=None) -> FastAPI:
@@ -76,7 +77,48 @@ def create_app(brain, memory: Memory, listener=None) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "model": brain._model, "clients": manager.count}
+        key = os.environ.get("GROQ_API_KEY", "")
+        return {
+            "status": "ok",
+            "model": brain._model,
+            "clients": manager.count,
+            "groq_key_set": bool(key),
+            "groq_key_preview": (key[:8] + "...") if key else "",
+            "voice": os.environ.get("JARVIS_VOICE", "de-DE-ConradNeural"),
+        }
+
+    class SettingsRequest(BaseModel):
+        groq_api_key: Optional[str] = None
+        voice: Optional[str] = None
+
+    @app.post("/settings")
+    async def save_settings(req: SettingsRequest, token: Optional[str] = None):
+        if not _check_token(token, env_token):
+            raise HTTPException(status_code=401)
+
+        env_path = WEB_DIR.parent / ".env"
+        updated = {}
+
+        def _set(key: str, value: str):
+            os.environ[key] = value
+            updated[key] = value
+            # .env Datei aktualisieren
+            if env_path.exists():
+                lines = env_path.read_text().splitlines()
+                for i, line in enumerate(lines):
+                    if line.startswith(f"{key}="):
+                        lines[i] = f"{key}={value}"
+                        break
+                else:
+                    lines.append(f"{key}={value}")
+                env_path.write_text("\n".join(lines) + "\n")
+
+        if req.groq_api_key and req.groq_api_key.strip():
+            _set("GROQ_API_KEY", req.groq_api_key.strip())
+        if req.voice and req.voice.strip():
+            _set("JARVIS_VOICE", req.voice.strip())
+
+        return {"updated": updated, "status": "ok"}
 
     @app.post("/transcribe")
     async def transcribe(audio: UploadFile = File(...), token: Optional[str] = None):

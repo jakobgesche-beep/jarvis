@@ -225,6 +225,56 @@
     .tool-name { font-family: var(--display); font-size: 10px; letter-spacing: 0.22em; color: var(--blue); }
     .tool-time { font-size: 9px; color: var(--text-dim); }
     .action-result { padding: 7px 9px; font-size: 11px; color: var(--text); white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; border-top: 1px dashed var(--line); background: rgba(0,0,0,0.15); }
+
+    /* ── Settings Overlay ── */
+    .settings-overlay {
+      display: none; position: fixed; inset: 0; z-index: 50;
+      background: rgba(5,8,13,0.92); backdrop-filter: blur(12px);
+      align-items: center; justify-content: center;
+    }
+    .settings-overlay.open { display: flex; }
+    .settings-panel {
+      width: min(480px, 95vw);
+      background: var(--bg-elev); border: 1px solid var(--line-bright);
+      border-radius: 4px; padding: 0;
+      position: relative;
+    }
+    .settings-panel::before, .settings-panel::after {
+      content: ""; position: absolute; width: 14px; height: 14px;
+      border: 1px solid var(--blue); box-shadow: 0 0 8px var(--blue-glow);
+    }
+    .settings-panel::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+    .settings-panel::after  { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+    .settings-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 18px; border-bottom: 1px solid var(--line);
+      background: linear-gradient(to right, rgba(0,200,255,0.07), transparent);
+    }
+    .settings-head h2 { font-family: var(--display); font-size: 11px; letter-spacing: 0.4em; color: var(--blue); margin: 0; }
+    .settings-close { background: none; border: 1px solid var(--line-bright); color: var(--text-dim); font-family: var(--mono); font-size: 10px; padding: 4px 10px; cursor: pointer; letter-spacing: 0.15em; }
+    .settings-close:hover { border-color: var(--red); color: var(--red); }
+    .settings-body { padding: 20px 18px; display: flex; flex-direction: column; gap: 16px; }
+    .settings-field label { display: block; font-size: 9px; color: var(--text-dim); letter-spacing: 0.25em; text-transform: uppercase; margin-bottom: 6px; }
+    .settings-field input, .settings-field select {
+      width: 100%; background: var(--bg); border: 1px solid var(--line-bright);
+      color: var(--text); font-family: var(--mono); font-size: 12px;
+      padding: 9px 12px; outline: none; border-radius: 2px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .settings-field input:focus, .settings-field select:focus { border-color: var(--blue); box-shadow: 0 0 10px var(--blue-glow); }
+    .settings-field select { -webkit-appearance: none; appearance: none; cursor: pointer; }
+    .settings-field select option { background: var(--bg-elev); }
+    .settings-hint { font-size: 10px; color: var(--text-faint); margin-top: 4px; }
+    .settings-save {
+      width: 100%; padding: 11px; background: transparent;
+      border: 1px solid var(--blue); color: var(--blue);
+      font-family: var(--display); font-size: 11px; letter-spacing: 0.3em;
+      cursor: pointer; transition: background 0.15s, box-shadow 0.15s; margin-top: 4px;
+    }
+    .settings-save:hover { background: rgba(0,200,255,0.1); box-shadow: 0 0 16px var(--blue-glow); }
+    .settings-msg { font-size: 11px; text-align: center; padding: 6px; border-radius: 2px; margin-top: 4px; }
+    .settings-msg.ok  { color: var(--green); border: 1px solid var(--green); background: rgba(25,245,177,0.07); }
+    .settings-msg.err { color: var(--red);   border: 1px solid var(--red);   background: rgba(255,71,111,0.07); }
   </style>
 </head>
 <body>
@@ -246,6 +296,34 @@
   <button class="setup-connect" onclick="connect()">INITIALIZE SYSTEM</button>
 </div>
 
+<!-- Settings Overlay -->
+<div class="settings-overlay" id="settings-overlay" onclick="closeSettingsOutside(event)">
+  <div class="settings-panel" id="settings-panel">
+    <div class="settings-head">
+      <h2>SYSTEM CONFIGURATION</h2>
+      <button class="settings-close" onclick="closeSettings()">CLOSE ✕</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-field">
+        <label>Groq API Key</label>
+        <input id="cfg-groq-key" type="password" placeholder="gsk_..." autocomplete="off">
+        <div class="settings-hint" id="cfg-key-status">Wird geladen...</div>
+      </div>
+      <div class="settings-field">
+        <label>Stimme (TTS)</label>
+        <select id="cfg-voice">
+          <option value="de-DE-ConradNeural">de-DE-ConradNeural – Deutsch, männlich (Standard)</option>
+          <option value="de-DE-KillianNeural">de-DE-KillianNeural – Deutsch, männlich</option>
+          <option value="de-AT-JonasNeural">de-AT-JonasNeural – Österreichisch</option>
+          <option value="en-GB-RyanNeural">en-GB-RyanNeural – Englisch britisch</option>
+        </select>
+      </div>
+      <button class="settings-save" onclick="saveSettings()">SPEICHERN & ANWENDEN</button>
+      <div id="settings-msg" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
 <!-- HUD -->
 <div id="app" class="hidden">
   <header class="hud-header">
@@ -256,7 +334,8 @@
     <div class="status-cluster">
       <div class="stat" id="stat-conn"><span class="dot"></span>LINK</div>
       <div class="stat" id="stat-clock">00:00:00</div>
-      <button class="settings-btn" onclick="resetSetup()">RESET</button>
+      <button class="settings-btn" onclick="openSettings()">⚙ CONFIG</button>
+      <button class="settings-btn" onclick="resetSetup()" style="border-color:var(--red);color:var(--red)">RESET</button>
     </div>
   </header>
 
@@ -648,6 +727,54 @@
   function startListenWave(){ waveTarget = 22; drawWave(); }
   function startThinkWave() { waveTarget = 10; drawWave(); }
   function startSpeakWave() { waveTarget = 18; drawWave(); }
+
+  // ── Settings ──
+  async function openSettings() {
+    document.getElementById('settings-overlay').classList.add('open');
+    document.getElementById('settings-msg').style.display = 'none';
+    // Aktuellen Status laden
+    try {
+      const r = await fetch(`${apiUrl}/health`);
+      const d = await r.json();
+      document.getElementById('cfg-key-status').textContent =
+        d.groq_key_set ? `✓ Gesetzt (${d.groq_key_preview})` : '✗ Nicht gesetzt';
+      const voiceEl = document.getElementById('cfg-voice');
+      if (d.voice) voiceEl.value = d.voice;
+    } catch { document.getElementById('cfg-key-status').textContent = 'Server nicht erreichbar'; }
+  }
+
+  function closeSettings() {
+    document.getElementById('settings-overlay').classList.remove('open');
+  }
+
+  function closeSettingsOutside(e) {
+    if (e.target === document.getElementById('settings-overlay')) closeSettings();
+  }
+
+  async function saveSettings() {
+    const key = document.getElementById('cfg-groq-key').value.trim();
+    const voice = document.getElementById('cfg-voice').value;
+    const msgEl = document.getElementById('settings-msg');
+    msgEl.style.display = 'none';
+
+    try {
+      const r = await fetch(`${apiUrl}/settings` + (apiToken ? `?token=${apiToken}` : ''), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({groq_api_key: key || null, voice: voice || null}),
+      });
+      const d = await r.json();
+      msgEl.className = 'settings-msg ok';
+      msgEl.textContent = '✓ Gespeichert – Änderungen sofort aktiv.';
+      msgEl.style.display = 'block';
+      document.getElementById('cfg-groq-key').value = '';
+      document.getElementById('cfg-key-status').textContent = key ? `✓ Gesetzt (${key.slice(0,8)}...)` : document.getElementById('cfg-key-status').textContent;
+    } catch (e) {
+      msgEl.className = 'settings-msg err';
+      msgEl.textContent = `✗ Fehler: ${e.message}`;
+      msgEl.style.display = 'block';
+    }
+  }
 
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
