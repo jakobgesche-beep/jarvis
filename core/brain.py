@@ -12,6 +12,7 @@ from tools.gmail import read_emails, send_email
 from tools.calendar import get_events, create_event
 from tools.browser import search_web
 from tools.notion import create_page, search_pages
+from tools.briefing import get_briefing
 
 _SYSTEM_PROMPT = """Du bist Jarvis, ein persönlicher KI-Assistent auf einem MacBook Air M4.
 Du kommunizierst auf Deutsch, bist präzise, freundlich und hilfreich.
@@ -173,6 +174,18 @@ _TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_briefing",
+            "description": "Gibt ein tägliches Briefing mit Uhrzeit, Datum und aktuellem Wetter zurück",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string", "default": "", "description": "Stadt für Wetter, leer = automatisch"}},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_notion",
             "description": "Durchsucht Notion nach Seiten",
             "parameters": {
@@ -197,6 +210,7 @@ _TOOL_MAP = {
         a["title"], a["start_iso"], a.get("duration_minutes", 60), a.get("description", "")
     ),
     "search_web": lambda a: search_web(a["query"]),  # async
+    "get_briefing": lambda a: get_briefing(a.get("city", "")),
     "save_to_notion": lambda a: create_page(a["title"], a["content"]),
     "search_notion": lambda a: search_pages(a["query"]),
 }

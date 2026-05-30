@@ -437,58 +437,106 @@
     const text = inp.value.trim();
     if (!text) return;
     inp.value = '';
+    await doSend(text);
+  }
 
+  async function doSend(text) {
     addTranscript('user', text);
     setThinking(true);
     setReactorState('thinking');
 
     try {
-      await fetch(`${apiUrl}/chat`, {
+      const r = await fetch(`${apiUrl}/chat`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({message: text, token: apiToken}),
       });
+      const data = await r.json();
+
+      // Antwort direkt aus fetch zeigen (falls WebSocket nicht verbunden)
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        setThinking(false);
+        setReactorState('speaking');
+        appendResponse(data.response);
+        addTranscript('jarvis', data.response);
+        setTimeout(() => setReactorState('idle'), 3000);
+      }
+      // Falls WebSocket verbunden, kommt die Antwort automatisch über handleEvent
     } catch {
       setThinking(false);
       setReactorState('idle');
-      appendResponse('Connection failed – is JARVIS running on your Mac?');
+      appendResponse('Verbindung fehlgeschlagen – läuft JARVIS auf deinem Mac?');
     }
   }
 
-  // ── Voice ──
-  function toggleMic() {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      appendResponse('Speech recognition not available in this browser.');
-      return;
-    }
-    isRecording ? stopMic() : startMic();
-  }
+  // ── Voice (MediaRecorder → /transcribe) ──
+  let mediaRecorder = null;
+  let audioChunks = [];
 
-  function startMic() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SR();
-    recognition.lang = 'de-DE';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.onresult = e => {
-      document.getElementById('input-text').value = e.results[0][0].transcript;
+  async function toggleMic() {
+    if (isRecording) {
       stopMic();
-      document.getElementById('input-form').dispatchEvent(new Event('submit', {cancelable: true}));
-    };
-    recognition.onend = () => stopMic();
-    recognition.onerror = () => stopMic();
-    recognition.start();
-    isRecording = true;
-    document.getElementById('mic-btn').classList.add('recording');
-    document.getElementById('mic-btn').textContent = 'STOP';
-    setReactorState('listening');
+    } else {
+      await startMic();
+    }
+  }
+
+  async function startMic() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+      audioChunks = [];
+
+      // Finde unterstützten MIME-Type
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/mp4';
+
+      mediaRecorder = new MediaRecorder(stream, {mimeType});
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunks, {type: mimeType});
+        await transcribeBlob(blob);
+      };
+
+      mediaRecorder.start();
+      isRecording = true;
+      document.getElementById('mic-btn').classList.add('recording');
+      document.getElementById('mic-btn').textContent = '■ STOP';
+      setReactorState('listening');
+    } catch (e) {
+      appendResponse(`Mikrofon-Zugriff verweigert: ${e.message}`);
+    }
   }
 
   function stopMic() {
-    try { recognition && recognition.stop(); } catch {}
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     isRecording = false;
     document.getElementById('mic-btn').classList.remove('recording');
     document.getElementById('mic-btn').textContent = 'MIC';
+    setReactorState('thinking');
+  }
+
+  async function transcribeBlob(blob) {
+    try {
+      const fd = new FormData();
+      fd.append('audio', blob, 'recording.webm');
+      const url = `${apiUrl}/transcribe` + (apiToken ? `?token=${apiToken}` : '');
+      const r = await fetch(url, {method: 'POST', body: fd});
+      const {text} = await r.json();
+      if (text && text.trim()) {
+        document.getElementById('input-text').value = text;
+        await doSend(text);
+      } else {
+        setReactorState('idle');
+        appendThink('Transkription leer – nochmal versuchen.\n');
+      }
+    } catch (e) {
+      setReactorState('idle');
+      appendResponse('Transkription fehlgeschlagen.');
+    }
   }
 
   // ── UI Helpers ──

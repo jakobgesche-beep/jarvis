@@ -1,8 +1,10 @@
-"""Mikrofon-Aufnahme, Wake-Word-Detection via openwakeword, STT via faster-whisper"""
+"""Mikrofon, Klatschen-Detection, STT via faster-whisper"""
 
 import asyncio
+import io
 import threading
-from typing import AsyncGenerator
+import time
+from typing import AsyncGenerator, Callable
 
 import numpy as np
 import sounddevice as sd
@@ -12,15 +14,19 @@ CHANNELS = 1
 CHUNK_MS = 30
 CHUNK_SAMPLES = int(SAMPLE_RATE * CHUNK_MS / 1000)
 SILENCE_TIMEOUT_S = 1.5
-WAKEWORD_THRESHOLD = 0.5
-WAKEWORD_CHUNK = 1280  # ~80ms bei 16kHz, von openwakeword erwartet
+
+# Klatschen: kurzer, harter Lautstärkeimpuls
+CLAP_THRESHOLD = 0.18
+CLAP_COOLDOWN_S = 0.3
+DOUBLE_CLAP_WINDOW_S = 0.9
 
 
 class Listener:
-    def __init__(self, model_size: str = "base", wake_word: str = "hey_jarvis"):
+    def __init__(self, model_size: str = "base"):
         self._model_size = model_size
-        self._wake_word = wake_word
         self._whisper = None
+        self._clap_callback: Callable | None = None
+        self._clap_thread: threading.Thread | None = None
 
     def _load_whisper(self):
         if self._whisper is None:
@@ -30,7 +36,7 @@ class Listener:
                 self._model_size,
                 device="cpu",
                 compute_type="int8",
-                num_workers=1,       # verhindert OpenMP-Crash auf Intel Mac
+                num_workers=1,
                 cpu_threads=2,
             )
 
@@ -39,34 +45,76 @@ class Listener:
         segments, _ = self._whisper.transcribe(audio, language="de", beam_size=5)
         return " ".join(s.text for s in segments).strip()
 
-    def _has_wake_word(self) -> bool:
+    def transcribe_bytes(self, audio_bytes: bytes) -> str:
+        """Transkribiert rohe PCM-Bytes (16kHz, mono, float32) – für API-Endpoint."""
+        audio = np.frombuffer(audio_bytes, dtype=np.float32)
+        return self._transcribe(audio)
+
+    def transcribe_webm(self, data: bytes) -> str:
+        """Transkribiert WebM/MP4-Audio aus dem Browser via ffmpeg."""
+        import subprocess, tempfile, soundfile as sf
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+            f.write(data)
+            src = f.name
+        dst = src + ".wav"
         try:
-            from openwakeword.model import Model
-            Model(wakeword_models=[self._wake_word], inference_framework="onnx")
-            return True
-        except Exception:
-            return False
+            subprocess.run(
+                ["ffmpeg", "-i", src, "-ar", "16000", "-ac", "1", dst, "-y", "-loglevel", "quiet"],
+                check=True, timeout=10,
+            )
+            audio, _ = sf.read(dst, dtype="float32")
+            return self._transcribe(audio)
+        except Exception as e:
+            return ""
+        finally:
+            import os
+            for p in [src, dst]:
+                try: os.unlink(p)
+                except: pass
 
-    def _wait_for_wake_word(self):
-        """Blockiert bis das Wake-Word erkannt wird."""
-        from openwakeword.model import Model
+    # ── Klatschen ──────────────────────────────────────────────────────────
 
-        oww = Model(wakeword_models=[self._wake_word], inference_framework="onnx")
-        detected = threading.Event()
+    def start_clap_detection(self, callback: Callable):
+        """Startet Doppelklatschen-Detection im Hintergrund."""
+        self._clap_callback = callback
+        self._clap_thread = threading.Thread(target=self._clap_loop, daemon=True)
+        self._clap_thread.start()
 
-        def callback(indata, frames, time_info, status):
-            scores = oww.predict(indata.flatten())
-            if any(v >= WAKEWORD_THRESHOLD for v in scores.values()):
-                detected.set()
+    def _clap_loop(self):
+        last_clap = 0.0
+        clap_count = 0
+        in_clap = False
+
+        def audio_cb(indata, frames, time_info, status):
+            nonlocal last_clap, clap_count, in_clap
+            rms = float(np.sqrt(np.mean(indata ** 2)))
+            now = time.time()
+
+            if rms > CLAP_THRESHOLD and not in_clap:
+                in_clap = True
+                dt = now - last_clap
+                if dt < DOUBLE_CLAP_WINDOW_S:
+                    clap_count += 1
+                    if clap_count >= 2:
+                        clap_count = 0
+                        # Doppelklatschen erkannt!
+                        t = threading.Thread(target=self._clap_callback, daemon=True)
+                        t.start()
+                else:
+                    clap_count = 1
+                last_clap = now
+
+            elif rms < 0.015:
+                in_clap = False
 
         with sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="float32",
-            blocksize=WAKEWORD_CHUNK,
-            callback=callback,
+            samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32",
+            blocksize=512, callback=audio_cb,
         ):
-            detected.wait()
+            while True:
+                sd.sleep(50)
+
+    # ── Aufnahme ───────────────────────────────────────────────────────────
 
     def _record_until_silence(self) -> np.ndarray | None:
         print("[Listener] Aufnahme läuft... (Stille beendet)")
@@ -78,18 +126,14 @@ class Listener:
             frames.append(indata.copy())
 
         with sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="float32",
-            blocksize=CHUNK_SAMPLES,
-            callback=callback,
+            samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32",
+            blocksize=CHUNK_SAMPLES, callback=callback,
         ):
             while True:
                 sd.sleep(CHUNK_MS)
                 if len(frames) < 2:
                     continue
-                last = frames[-1].flatten()
-                rms = float(np.sqrt(np.mean(last**2)))
+                rms = float(np.sqrt(np.mean(frames[-1].flatten() ** 2)))
                 if rms < 0.01:
                     silence_frames += 1
                 else:
@@ -103,25 +147,11 @@ class Listener:
 
     async def listen(self) -> AsyncGenerator[str, None]:
         loop = asyncio.get_event_loop()
-        use_wake_word = await loop.run_in_executor(None, self._has_wake_word)
-
-        if use_wake_word:
-            print(f"[Listener] Warte auf Wake-Word '{self._wake_word}'...")
-            while True:
-                await loop.run_in_executor(None, self._wait_for_wake_word)
-                print("[Listener] Wake-Word erkannt!")
-                audio = await loop.run_in_executor(None, self._record_until_silence)
-                if audio is not None and len(audio) > SAMPLE_RATE * 0.3:
-                    transcript = await loop.run_in_executor(None, self._transcribe, audio)
-                    if transcript:
-                        yield transcript
-                print(f"[Listener] Warte auf Wake-Word '{self._wake_word}'...")
-        else:
-            print("[Listener] openwakeword nicht verfügbar – Drücke Enter für Aufnahme.")
-            while True:
-                await loop.run_in_executor(None, input, "")
-                audio = await loop.run_in_executor(None, self._record_until_silence)
-                if audio is not None and len(audio) > SAMPLE_RATE * 0.3:
-                    transcript = await loop.run_in_executor(None, self._transcribe, audio)
-                    if transcript:
-                        yield transcript
+        print("[Listener] Drücke Enter für Aufnahme (oder klatsche 2× für Briefing)")
+        while True:
+            await loop.run_in_executor(None, input, "")
+            audio = await loop.run_in_executor(None, self._record_until_silence)
+            if audio is not None and len(audio) > SAMPLE_RATE * 0.3:
+                transcript = await loop.run_in_executor(None, self._transcribe, audio)
+                if transcript:
+                    yield transcript

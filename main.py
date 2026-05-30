@@ -51,12 +51,25 @@ async def run_async(memory, speaker, brain, listener):
     await speaker.say("Jarvis ist bereit.")
     await asyncio.gather(
         voice_loop(listener, brain, speaker),
-        start_server(brain, memory),
+        start_server(brain, memory, listener),
     )
 
 
 def run_backend(memory, speaker, brain, listener):
     asyncio.run(run_async(memory, speaker, brain, listener))
+
+
+def on_double_clap(brain, speaker):
+    """Wird beim Doppelklatschen aufgerufen – gibt Briefing aus."""
+    async def _briefing():
+        print("[JARVIS] Doppelklatschen erkannt → Briefing")
+        response = await brain.process("Gib mir ein kurzes tägliches Briefing mit Uhrzeit, Datum und Wetter.")
+        print(f"[JARVIS] {response}")
+        await speaker.say(response)
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(_briefing())
+    loop.close()
 
 
 def wait_for_server(port: int, timeout: int = 15) -> bool:
@@ -79,6 +92,9 @@ def main():
     speaker = Speaker()
     brain = Brain(memory=memory)
     listener = Listener()
+
+    # Klatschen-Detection starten
+    listener.start_clap_detection(lambda: on_double_clap(brain, speaker))
 
     # Backend (Voice-Loop + API-Server) im Hintergrund starten
     t = threading.Thread(

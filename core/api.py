@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -55,7 +55,7 @@ def _check_token(req_token: Optional[str], env_token: str) -> bool:
     return req_token == env_token
 
 
-def create_app(brain, memory: Memory) -> FastAPI:
+def create_app(brain, memory: Memory, listener=None) -> FastAPI:
     app = FastAPI(title="JARVIS", docs_url=None, redoc_url=None)
     env_token = os.environ.get("JARVIS_API_TOKEN", "")
 
@@ -76,11 +76,19 @@ def create_app(brain, memory: Memory) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {
-            "status": "ok",
-            "model": brain._model,
-            "clients": manager.count,
-        }
+        return {"status": "ok", "model": brain._model, "clients": manager.count}
+
+    @app.post("/transcribe")
+    async def transcribe(audio: UploadFile = File(...), token: Optional[str] = None):
+        """Empfängt WebM-Audio vom Browser und gibt transkribierten Text zurück."""
+        if not _check_token(token, env_token):
+            raise HTTPException(status_code=401)
+        if listener is None:
+            raise HTTPException(status_code=503, detail="Listener nicht verfügbar")
+        data = await audio.read()
+        loop = asyncio.get_event_loop()
+        text = await loop.run_in_executor(None, listener.transcribe_webm, data)
+        return {"text": text}
 
     @app.post("/chat")
     async def chat(req: ChatRequest):
@@ -133,9 +141,9 @@ def create_app(brain, memory: Memory) -> FastAPI:
     return app
 
 
-async def start_server(brain, memory: Memory):
+async def start_server(brain, memory: Memory, listener=None):
     port = int(os.getenv("JARVIS_API_PORT", "8080"))
-    app = create_app(brain=brain, memory=memory)
+    app = create_app(brain=brain, memory=memory, listener=listener)
     config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning")
     server = uvicorn.Server(config)
     print(f"[API] Server läuft auf http://0.0.0.0:{port}")
