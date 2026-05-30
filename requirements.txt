@@ -5,9 +5,11 @@ openai>=1.30.0
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
 aiofiles>=23.0.0
+python-multipart>=0.0.9
+soundfile>=0.12.0
 
-# Natives Mac-Fenster
-pywebview>=5.0.0
+# Text-to-Speech (Iron Man Stimme)
+edge-tts>=7.0.0
 
 # Speech-to-Text (lokal, kostenlos)
 faster-whisper>=1.0.0

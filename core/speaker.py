@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-EDGE_VOICE = os.getenv("JARVIS_VOICE", "en-GB-RyanNeural")  # britisch, wie Jarvis
+EDGE_VOICE = os.getenv("JARVIS_VOICE", "de-DE-ConradNeural")  # Deutsch, professionell
 
 
 class Speaker:
